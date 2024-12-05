@@ -3,10 +3,13 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { gsap } from "gsap";
 import firefliesVertexShader from "./shaders/fireflies/vertex.glsl";
 import firefliesFragmentShader from "./shaders/fireflies/fragment.glsl";
 import portalVertexShader from "./shaders/portal/vertex.glsl";
 import portalFragmentShader from "./shaders/portal/fragment.glsl";
+import overlayVertexShader from "./shaders/overlay/vertex.glsl";
+import overlayFragmentShader from "./shaders/overlay/fragment.glsl";
 
 /**
  * Base
@@ -14,8 +17,9 @@ import portalFragmentShader from "./shaders/portal/fragment.glsl";
 // Debug
 const debugObject = {};
 const gui = new GUI({
-	width: 400,
+	width: 200,
 });
+gui.hide();
 
 // Add global settings folder
 const globalFolder = gui.addFolder("Global Settings");
@@ -29,15 +33,48 @@ const scene = new THREE.Scene();
 /**
  * Loaders
  */
+// Loading manager
+const loadingElement = document.querySelector(".loading");
+const loadingTextElement = document.querySelector(".loading-text");
+
+let simulatedProgress = 0;
+const simulateLoading = (callback) => {
+	loadingTextElement.style.fontSize = "max(32px, 10vw)";
+	if (simulatedProgress < 100) {
+		simulatedProgress += 1;
+		loadingTextElement.textContent = Math.floor(simulatedProgress);
+		requestAnimationFrame(() => simulateLoading(callback));
+	} else if (callback) {
+		callback();
+	}
+};
+
+const loadingManager = new THREE.LoadingManager(() => {
+	simulateLoading(() => {
+		gsap.delayedCall(1, () => {
+			loadingElement.classList.add("ended");
+			gsap.to(overlayMaterial.uniforms.uAlpha, {
+				value: 0,
+				duration: 2,
+				delay: 1,
+				onComplete: () => {
+					overlay.visible = false;
+					gui.show();
+				},
+			});
+		});
+	});
+});
+
 // Texture loader
-const textureLoader = new THREE.TextureLoader();
+const textureLoader = new THREE.TextureLoader(loadingManager);
 
 // Draco loader
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath("draco/");
 
 // GLTF loader
-const gltfLoader = new GLTFLoader();
+const gltfLoader = new GLTFLoader(loadingManager);
 gltfLoader.setDRACOLoader(dracoLoader);
 
 /**
@@ -118,6 +155,22 @@ const portalLightMaterial = new THREE.ShaderMaterial({
 	fragmentShader: portalFragmentShader,
 	side: THREE.DoubleSide,
 });
+
+/**
+ * Overlay
+ */
+const overlayGeometry = new THREE.PlaneGeometry(2, 2, 1, 1);
+const overlayMaterial = new THREE.ShaderMaterial({
+	transparent: true,
+	uniforms: {
+		uAlpha: { value: 1 },
+		uColor: { value: new THREE.Color(0x202020) },
+	},
+	vertexShader: overlayVertexShader,
+	fragmentShader: overlayFragmentShader,
+});
+const overlay = new THREE.Mesh(overlayGeometry, overlayMaterial);
+scene.add(overlay);
 
 /**
  * Model
