@@ -50,3 +50,10 @@ body {
 	font-feature-settings: "trim";
 	font-variant-numeric: tabular-nums;
 }
+
+.tweakpane-container {
+	position: fixed;
+	top: 0;
+	right: 0;
+	z-index: 100;
+}

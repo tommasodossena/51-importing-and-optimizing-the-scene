@@ -1,4 +1,4 @@
-import GUI from "lil-gui";
+import { Pane } from "tweakpane";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -16,13 +16,20 @@ import overlayFragmentShader from "./shaders/overlay/fragment.glsl";
  */
 // Debug
 const debugObject = {};
-const gui = new GUI({
-	width: 200,
+const pane = new Pane({
+	title: "Portal Scene Parameters",
 });
-gui.hide();
+pane.hidden = true;
 
-// Add global settings folder
-const globalFolder = gui.addFolder("Global Settings");
+// Add pane folders
+const globalFolder = pane.addFolder({
+	title: "Global Settings",
+	expanded: false,
+});
+const portalFolder = pane.addFolder({
+	title: "Portal Settings",
+	expanded: false,
+});
 
 // Canvas
 const canvas = document.querySelector("canvas.webgl");
@@ -59,7 +66,7 @@ const loadingManager = new THREE.LoadingManager(() => {
 				delay: 1,
 				onComplete: () => {
 					overlay.visible = false;
-					gui.show();
+					pane.hidden = false;
 				},
 			});
 		});
@@ -94,59 +101,69 @@ const bakedMaterial = new THREE.MeshBasicMaterial({ map: bakedTexture });
 const poleLightMaterial = new THREE.MeshBasicMaterial({ color: 0xffffe5 });
 
 // Portal light material
-debugObject.portalLightColorStart = new THREE.Color(0x000000);
-debugObject.portalLightColorEnd = new THREE.Color(0xffffff);
+debugObject.portalLightColorStart = "#000000";
+debugObject.portalLightColorEnd = "#ffffff";
 debugObject.portalAnimationSpeed = 0.2;
 debugObject.portalNoiseScale = 5.0;
 debugObject.portalOuterGlowStrength = 1.5;
 
-const portalFolder = gui.addFolder("Portal Settings");
+// Update portal controls
+portalFolder
+	.addBinding(debugObject, "portalLightColorStart", {
+		label: "Light Color Start",
+		view: "color",
+	})
+	.on("change", ({ value }) => {
+		portalLightMaterial.uniforms.uColorStart.value = new THREE.Color(value);
+	});
 
 portalFolder
-	.addColor(debugObject, "portalLightColorStart")
-	.onChange(() => {
-		portalLightMaterial.uniforms.uColorStart.value =
-			debugObject.portalLightColorStart;
+	.addBinding(debugObject, "portalLightColorEnd", {
+		label: "Light Color End",
+		view: "color",
 	})
-	.name("Light Color Start");
+	.on("change", ({ value }) => {
+		portalLightMaterial.uniforms.uColorEnd.value = new THREE.Color(value);
+	});
 
 portalFolder
-	.addColor(debugObject, "portalLightColorEnd")
-	.onChange(() => {
-		portalLightMaterial.uniforms.uColorEnd.value =
-			debugObject.portalLightColorEnd;
+	.addBinding(debugObject, "portalAnimationSpeed", {
+		label: "Animation Speed",
+		min: 0.1,
+		max: 1,
+		step: 0.1,
 	})
-	.name("Light Color End");
+	.on("change", ({ value }) => {
+		portalLightMaterial.uniforms.uAnimationSpeed.value = value;
+	});
 
 portalFolder
-	.add(debugObject, "portalAnimationSpeed", 0.1, 1, 0.1)
-	.onChange(() => {
-		portalLightMaterial.uniforms.uAnimationSpeed.value =
-			debugObject.portalAnimationSpeed;
+	.addBinding(debugObject, "portalNoiseScale", {
+		label: "Noise Scale",
+		min: 1,
+		max: 10,
+		step: 0.5,
 	})
-	.name("Animation Speed");
+	.on("change", ({ value }) => {
+		portalLightMaterial.uniforms.uNoiseScale.value = value;
+	});
 
 portalFolder
-	.add(debugObject, "portalNoiseScale", 1, 10, 0.5)
-	.onChange(() => {
-		portalLightMaterial.uniforms.uNoiseScale.value =
-			debugObject.portalNoiseScale;
+	.addBinding(debugObject, "portalOuterGlowStrength", {
+		label: "Outer Glow",
+		min: 0,
+		max: 3,
+		step: 0.1,
 	})
-	.name("Noise Scale");
-
-portalFolder
-	.add(debugObject, "portalOuterGlowStrength", 0, 3, 0.1)
-	.onChange(() => {
-		portalLightMaterial.uniforms.uOuterGlowStrength.value =
-			debugObject.portalOuterGlowStrength;
-	})
-	.name("Outer Glow");
+	.on("change", ({ value }) => {
+		portalLightMaterial.uniforms.uOuterGlowStrength.value = value;
+	});
 
 const portalLightMaterial = new THREE.ShaderMaterial({
 	uniforms: {
 		uTime: { value: 0 },
-		uColorStart: { value: debugObject.portalLightColorStart },
-		uColorEnd: { value: debugObject.portalLightColorEnd },
+		uColorStart: { value: new THREE.Color(debugObject.portalLightColorStart) },
+		uColorEnd: { value: new THREE.Color(debugObject.portalLightColorEnd) },
 		uAnimationSpeed: { value: debugObject.portalAnimationSpeed },
 		uNoiseScale: { value: debugObject.portalNoiseScale },
 		uOuterGlowStrength: { value: debugObject.portalOuterGlowStrength },
@@ -231,10 +248,13 @@ const firefliesMaterial = new THREE.ShaderMaterial({
 	depthWrite: false,
 });
 
-// Move fireflies size control to global folder
-globalFolder
-	.add(firefliesMaterial.uniforms.uSize, "value", 0, 300, 1)
-	.name("Fireflies Size");
+// Update fireflies size control
+globalFolder.addBinding(firefliesMaterial.uniforms.uSize, "value", {
+	label: "Fireflies Size",
+	min: 0,
+	max: 300,
+	step: 1,
+});
 
 // Points
 const fireflies = new THREE.Points(firefliesGeometry, firefliesMaterial);
@@ -301,15 +321,13 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setSize(sizes.width, sizes.height);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-// Move background color control to global folder
+// Background color
 debugObject.clearColor = "#202020";
 renderer.setClearColor(debugObject.clearColor);
-globalFolder
-	.addColor(debugObject, "clearColor")
-	.onChange(() => {
-		renderer.setClearColor(debugObject.clearColor);
-	})
-	.name("Background");
+globalFolder.addBinding(debugObject, "clearColor", {
+	label: "Background",
+	view: "color",
+});
 
 /**
  * Animate
